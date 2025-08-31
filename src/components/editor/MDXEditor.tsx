@@ -24,6 +24,7 @@ export function MDXEditor({ value, onChange }: MDXEditorProps) {
   const [dialogOpen, setDialogOpen] = useState(false);
   const [mounted, setMounted] = useState(false);
   const [editorInstance, setEditorInstance] = useState<editor.IStandaloneCodeEditor | null>(null);
+  const [selectedText, setSelectedText] = useState('');
   const [selectionTooltip, setSelectionTooltip] = useState({
     visible: false,
     position: { x: 0, y: 0 },
@@ -58,58 +59,64 @@ export function MDXEditor({ value, onChange }: MDXEditorProps) {
     setStreamController(controller);
     
     let accumulatedText = '';
+    let hasReceivedContent = false;
     
     try {
-  toast.info("Generating content...", {
-    description: `Using ${config.model} to create your content`,
-  });
-
-  const stream = await sendAIGenMDXStream(config);
-  const reader = stream.getReader();
-
-  try {
-    while (true) {
-      if (controller.signal.aborted) {
-        await reader.cancel();
-        break;
-      }
-      
-      const { done, value } = await reader.read();
-      //Handle the case where the stream ends without any data 
-      //Catch empty stream (possibly invalid API key)
-      //Catch error because stream sallowed error
-      if (done && !value) {
-        throw new Error("Returned empty stream (possibly invalid API key)");
-      }
-      if (done) break;
-      if (value) {
-        accumulatedText += value;
-        onChange(accumulatedText);
-      }
-    }
-
-    if (!controller.signal.aborted) {
-      toast.success("Content generated successfully!", {
-        description: "Your new MDX content is ready to edit",
+      toast.info("Generating content...", {
+        description: `Using ${config.model} to create your content`,
       });
-    }
-  } catch (err) {
-    console.error("Stream error:", err);
-    toast.error("Stream failed", {
-      description: err instanceof Error ? err.message : "Unknown error during streaming",
-    });
-  } finally {
-    reader.releaseLock();
-  }
-} catch (error) {
-  if (!controller.signal.aborted) {
-    console.error("Generation error:", error);
-    toast.error("Generation failed", {
-      description:
-        error instanceof Error ? error.message : "Unknown error occurred",
-    });
-  }
-}finally {
+
+      const stream = await sendAIGenMDXStream(config);
+      const reader = stream.getReader();
+
+      try {
+        while (true) {
+          if (controller.signal.aborted) {
+            await reader.cancel();
+            break;
+          }
+          
+          const { done, value } = await reader.read();
+          
+          if (done) {
+            if (!hasReceivedContent && accumulatedText.trim() === '') {
+              throw new Error("No content received from API (possibly invalid API key or model)");
+            }
+            break;
+          }
+          
+          if (value && value.trim() !== '') {
+            hasReceivedContent = true;
+            accumulatedText += value;
+            onChange(accumulatedText);
+          }
+        }
+
+        if (!controller.signal.aborted && hasReceivedContent) {
+          toast.success("Content generated successfully!", {
+            description: "Your new MDX content is ready to edit",
+          });
+        }
+      } catch (streamError) {
+        console.error("Stream reading error:", streamError);
+        if (!controller.signal.aborted) {
+          toast.error("Stream failed", {
+            description: streamError instanceof Error ? streamError.message : "Error reading stream data",
+          });
+        }
+      } finally {
+        reader.releaseLock();
+        setSelectedText('');
+      }
+    } catch (error) {
+      if (!controller.signal.aborted) {
+        console.error("Generation error:", error);
+        
+        toast.error("Generation failed", {
+          description: error instanceof Error ? error.message : "An unknown error occurred during generation",
+        });
+      }
+    } finally {
       setIsGenerating(false);
       setStreamController(null);
     }
@@ -117,7 +124,7 @@ export function MDXEditor({ value, onChange }: MDXEditorProps) {
 
   const handleSelectionAIGenerate = async (selectedText: string) => {
     setSelectionTooltip({ visible: false, position: { x: 0, y: 0 }, selectedText: '' });
-    
+    setSelectedText(selectedText);
     // For now, open the main AI dialog with the selected text as context
     setDialogOpen(true);
   };
@@ -208,7 +215,7 @@ export function MDXEditor({ value, onChange }: MDXEditorProps) {
         </div>
       </CardHeader>
       <CardContent className="flex-1 p-0">
-        <div className="h-full min-h-[500px]">
+        <div className="h-full min-h-[500px] relative">
           <Editor
             height="100%"
             defaultLanguage="markdown"
@@ -232,7 +239,7 @@ export function MDXEditor({ value, onChange }: MDXEditorProps) {
             }}
           />
           {isGenerating && (
-            <div className="absolute top-0 left-0 right-0 bg-primary/10 backdrop-blur-sm p-2 text-center text-sm text-primary">
+            <div className="absolute top-0 left-0 right-0 bg-primary/10 backdrop-blur-sm p-2 text-center text-sm text-primary z-10">
               AI is generating content... Click "Stop" to cancel
             </div>
           )}
@@ -247,6 +254,7 @@ export function MDXEditor({ value, onChange }: MDXEditorProps) {
       />
       
       <AIGenerateDialog
+        selectedText={selectedText}
         open={dialogOpen}
         onOpenChange={setDialogOpen}
         onGenerate={handleAIGenerate}

@@ -24,6 +24,7 @@ import { Loader2, Sparkles, Eye, EyeOff } from 'lucide-react';
 import { AIGenerateConfig } from '@/lib/modules/llm/types';
 
 interface AIGenerateDialogProps {
+  selectedText: string;
   open: boolean;
   onOpenChange: (open: boolean) => void;
   onGenerate: (config: AIGenerateConfig) => Promise<void>;
@@ -44,6 +45,7 @@ const AI_MODELS = [
 ];
 
 export function AIGenerateDialog({ 
+  selectedText,
   open, 
   onOpenChange, 
   onGenerate, 
@@ -65,7 +67,7 @@ export function AIGenerateDialog({
     await onGenerate({
       model,
       apiKey: apiKey.trim(),
-      prompt: prompt.trim(),
+      prompt: selectedText + ' ' + prompt,
       provider: selectedModel?.provider.toLowerCase() === 'google' ? 'gemini' : 'openrouter',
     });
   };
