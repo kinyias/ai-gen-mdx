@@ -21,6 +21,7 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import { Loader2, Sparkles, Eye, EyeOff } from 'lucide-react';
+import { AIGenerateConfig } from '@/lib/modules/llm/types';
 
 interface AIGenerateDialogProps {
   open: boolean;
@@ -29,18 +30,17 @@ interface AIGenerateDialogProps {
   isGenerating: boolean;
 }
 
-export interface AIGenerateConfig {
-  model: string;
-  apiKey: string;
-  prompt: string;
-}
+
 
 const AI_MODELS = [
-  { value: 'gpt-4', label: 'GPT-4', provider: 'OpenAI' },
-  { value: 'gpt-3.5-turbo', label: 'GPT-3.5 Turbo', provider: 'OpenAI' },
-  { value: 'claude-3-sonnet', label: 'Claude 3 Sonnet', provider: 'Anthropic' },
-  { value: 'claude-3-haiku', label: 'Claude 3 Haiku', provider: 'Anthropic' },
-  { value: 'gemini-pro', label: 'Gemini Pro', provider: 'Google' },
+  { value: 'gemini-2.5-flash', label: 'Gemini 2.5 Flash', provider: 'Google' },
+  { value: 'gemini-2.0-flash', label: 'Gemini 2.0 Flash', provider: 'Google' },
+  { value: 'gemini-2.0-pro-exp', label: 'Gemini 2.0 Pro Experimental', provider: 'Google' },
+  { value: 'gemini-2.5-pro', label: 'Gemini 2.5 Pro', provider: 'Google' },
+  { value: 'deepseek/deepseek-chat-v3.1:free', label: 'Deepseek-chat-v3.1:free', provider: 'openrouter' },
+  { value: 'openai/gpt-oss-120b:free', label: 'gpt-oss-120b:free', provider: 'openrouter' },
+  { value: 'openai/gpt-oss-20b:free', label: 'gpt-oss-20b:free', provider: 'openrouter' },
+  { value: 'moonshotai/kimi-k2:free', label: 'kimi-k2:free', provider: 'openrouter' },
 ];
 
 export function AIGenerateDialog({ 
@@ -49,11 +49,14 @@ export function AIGenerateDialog({
   onGenerate, 
   isGenerating 
 }: AIGenerateDialogProps) {
-  const [model, setModel] = useState('gpt-4');
+  const [model, setModel] = useState('gemini-2.5-flash');
   const [apiKey, setApiKey] = useState('');
   const [prompt, setPrompt] = useState('Generate an engaging MDX article about modern web development with interactive examples and code snippets.');
   const [showApiKey, setShowApiKey] = useState(false);
 
+  
+  const selectedModel = AI_MODELS.find(m => m.value === model);
+  
   const handleGenerate = async () => {
     if (!apiKey.trim() || !prompt.trim()) {
       return;
@@ -63,11 +66,9 @@ export function AIGenerateDialog({
       model,
       apiKey: apiKey.trim(),
       prompt: prompt.trim(),
+      provider: selectedModel?.provider.toLowerCase() === 'google' ? 'gemini' : 'openrouter',
     });
   };
-
-  const selectedModel = AI_MODELS.find(m => m.value === model);
-
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="sm:max-w-[500px]">

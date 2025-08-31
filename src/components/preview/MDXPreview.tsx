@@ -4,7 +4,7 @@ import React from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { AlertTriangle } from 'lucide-react';
-import { MDXContent } from '@/components/preview/MDXContent';
+import { MDXRenderer } from '@/components/preview/MDXRenderer';
 
 interface MDXPreviewProps {
   content: string;
@@ -37,15 +37,26 @@ function MDXErrorBoundary({ children, fallback }: MDXErrorBoundaryProps) {
 
 class ErrorBoundary extends React.Component<
   { children: React.ReactNode; fallback?: React.ReactNode },
-  { hasError: boolean; error?: Error }
+  { hasError: boolean; error?: Error; errorId: string }
 > {
   constructor(props: { children: React.ReactNode; fallback?: React.ReactNode }) {
     super(props);
-    this.state = { hasError: false };
+    this.state = { hasError: false, errorId: '' };
   }
 
   static getDerivedStateFromError(error: Error) {
-    return { hasError: true, error };
+    return { 
+      hasError: true, 
+      error,
+      errorId: Date.now().toString() // Force re-render when error changes
+    };
+  }
+
+  componentDidUpdate(prevProps: { children: React.ReactNode; fallback?: React.ReactNode }) {
+    // Reset error state when content changes (user fixes the error)
+    if (prevProps.children !== this.props.children && this.state.hasError) {
+      this.setState({ hasError: false, error: undefined, errorId: '' });
+    }
   }
 
   render() {
@@ -54,7 +65,7 @@ class ErrorBoundary extends React.Component<
         <Alert variant="destructive">
           <AlertTriangle className="h-4 w-4" />
           <AlertDescription>
-            Failed to render MDX content. Please check your syntax.
+            MDX Syntax Error: Please check your syntax and try again.
             {this.state.error && (
               <details className="mt-2">
                 <summary className="cursor-pointer text-sm">Error details</summary>
@@ -73,30 +84,6 @@ class ErrorBoundary extends React.Component<
 }
 
 export function MDXPreview({ content }: MDXPreviewProps) {
-  const renderMDX = () => {
-    if (!content.trim()) {
-      return (
-        <div className="text-center text-muted-foreground py-12">
-          <p>Start typing in the editor to see your MDX content here</p>
-        </div>
-      );
-    }
-
-    try {
-      return (
-        <MDXContent content={content} />
-      );
-    } catch (error) {
-      return (
-        <Alert variant="destructive">
-          <AlertTriangle className="h-4 w-4" />
-          <AlertDescription>
-            Failed to compile MDX content. Please check your syntax.
-          </AlertDescription>
-        </Alert>
-      );
-    }
-  };
 
   return (
     <Card className="h-full flex flex-col">
@@ -106,7 +93,7 @@ export function MDXPreview({ content }: MDXPreviewProps) {
       <CardContent className="flex-1 overflow-auto">
         <MDXErrorBoundary>
           <div className="prose prose-neutral dark:prose-invert max-w-none">
-            {renderMDX()}
+            <MDXRenderer content={content} />
           </div>
         </MDXErrorBoundary>
       </CardContent>

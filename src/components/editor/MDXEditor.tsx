@@ -6,9 +6,12 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Sparkles } from 'lucide-react';
 import { useTheme } from 'next-themes';
-import { AIGenerateDialog, type AIGenerateConfig } from '@/components/dialogs/AIGenerateDialog';
+import { AIGenerateDialog } from '@/components/dialogs/AIGenerateDialog';
+import { SelectionTooltip } from '@/components/editor/SelectionTooltip';
 import { toast } from 'sonner';
-import type { EditorTheme } from '@/types/mdx';
+import type { editor } from 'monaco-editor';
+import { AIGenerateConfig } from '@/lib/modules/llm/types';
+import { sendAIGenMDX } from '@/lib/modules/llm/llm-service';
 
 interface MDXEditorProps {
   value: string;
@@ -20,6 +23,12 @@ export function MDXEditor({ value, onChange }: MDXEditorProps) {
   const [isGenerating, setIsGenerating] = useState(false);
   const [dialogOpen, setDialogOpen] = useState(false);
   const [mounted, setMounted] = useState(false);
+  const [editorInstance, setEditorInstance] = useState<editor.IStandaloneCodeEditor | null>(null);
+  const [selectionTooltip, setSelectionTooltip] = useState({
+    visible: false,
+    position: { x: 0, y: 0 },
+    selectedText: '',
+  });
 
   useEffect(() => {
     setMounted(true);
@@ -39,53 +48,67 @@ export function MDXEditor({ value, onChange }: MDXEditorProps) {
       toast.info('Generating content...', {
         description: `Using ${config.model} to create your content`,
       });
-
-      const response = await fetch('/api/ai/generate', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          prompt: config.prompt,
-          model: config.model,
-          apiKey: config.apiKey,
-          context: value,
-        }),
-      });
-
-      const data = await response.json();
-      
-      if (data.success) {
-        onChange(data.content);
+      console.log(config);
+      const data =await sendAIGenMDX(config);
+        onChange(data);
         toast.success('Content generated successfully!', {
           description: 'Your new MDX content is ready to edit',
         });
-      } else {
-        toast.error('Generation failed', {
-          description: data.error || 'Please try again',
-        });
-      }
-    } catch (error) {
-      toast.error('Network error', {
-        description: 'Failed to connect to AI service',
-      });
     } finally {
       setIsGenerating(false);
     }
   };
 
-  const editorTheme: EditorTheme = {
-    base: theme === 'dark' ? 'vs-dark' : 'vs-light',
-    inherit: true,
-    rules: [
-      { token: 'comment', foreground: '6A737D', fontStyle: 'italic' },
-      { token: 'keyword', foreground: 'D73A49' },
-      { token: 'string', foreground: '032F62' },
-    ],
-    colors: {
-      'editor.background': theme === 'dark' ? '#0D1117' : '#FFFFFF',
-    }
+  const handleSelectionAIGenerate = async (selectedText: string) => {
+    setSelectionTooltip({ visible: false, position: { x: 0, y: 0 }, selectedText: '' });
+    
+    // For now, open the main AI dialog with the selected text as context
+    setDialogOpen(true);
   };
+
+  const handleEditorMount = (editor: editor.IStandaloneCodeEditor) => {
+    setEditorInstance(editor);
+    
+    // Listen for selection changes
+    editor.onDidChangeCursorSelection((e) => {
+      const selection = editor.getSelection();
+      if (selection && !selection.isEmpty()) {
+        const selectedText = editor.getModel()?.getValueInRange(selection) || '';
+        
+        if (selectedText.trim().length > 0) {
+          // Get the position of the selection end
+          const position = editor.getScrolledVisiblePosition(selection.getEndPosition());
+          
+          if (position) {
+            const editorDomNode = editor.getDomNode();
+            const rect = editorDomNode?.getBoundingClientRect();
+            
+            if (rect) {
+              setSelectionTooltip({
+                visible: true,
+                position: {
+                  x: rect.left + position.left,
+                  y: rect.top + position.top,
+                },
+                selectedText,
+              });
+            }
+          }
+        }
+      } else {
+        setSelectionTooltip({ visible: false, position: { x: 0, y: 0 }, selectedText: '' });
+      }
+    });
+
+    // Hide tooltip when clicking elsewhere
+    editor.onDidFocusEditorText(() => {
+      const selection = editor.getSelection();
+      if (!selection || selection.isEmpty()) {
+        setSelectionTooltip({ visible: false, position: { x: 0, y: 0 }, selectedText: '' });
+      }
+    });
+  };
+
 
   if (!mounted) {
     return (
@@ -123,6 +146,7 @@ export function MDXEditor({ value, onChange }: MDXEditorProps) {
             defaultLanguage="markdown"
             value={value}
             onChange={handleEditorChange}
+            onMount={handleEditorMount}
             theme={theme === 'dark' ? 'vs-dark' : 'vs-light'}
             options={{
               minimap: { enabled: false },
@@ -140,6 +164,13 @@ export function MDXEditor({ value, onChange }: MDXEditorProps) {
           />
         </div>
       </CardContent>
+      
+      <SelectionTooltip
+        visible={selectionTooltip.visible}
+        position={selectionTooltip.position}
+        selectedText={selectionTooltip.selectedText}
+        onAIGenerate={handleSelectionAIGenerate}
+      />
       
       <AIGenerateDialog
         open={dialogOpen}
