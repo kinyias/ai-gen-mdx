@@ -18,11 +18,6 @@ export function MDXRenderer({ content }: MDXRendererProps) {
         setIsCompiling(true);
         setError(null);
         
-        // Basic validation for incomplete HTML tags
-        const openTags = (content.match(/<[^/>][^>]*>/g) || []).length;
-        const closeTags = (content.match(/<\/[^>]+>/g) || []).length;
-        const selfClosingTags = (content.match(/<[^>]*\/>/g) || []).length;
-        
         // Check for incomplete tags like "<" without closing ">"
         const incompleteTagMatch = content.match(/<[^>]*$/);
         if (incompleteTagMatch) {

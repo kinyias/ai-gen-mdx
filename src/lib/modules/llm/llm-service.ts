@@ -1,7 +1,7 @@
 // lib/llm-service.ts
 import { createGoogleGenerativeAI } from '@ai-sdk/google';
 import { createOpenRouter } from '@openrouter/ai-sdk-provider';
-import { generateText, streamText } from 'ai';
+import { generateText } from 'ai';
 import { AIGenerateConfig } from './types';
 
 export async function sendAIGenMDXStream(content: AIGenerateConfig): Promise<ReadableStream<string>> {
@@ -61,21 +61,18 @@ async function sendGeminiMessageStream(content: AIGenerateConfig): Promise<Reada
     if (!response.body) {
       throw new Error('No response body received from Gemini API');
     }
-
     return new ReadableStream({
       async start(controller) {
         const reader = response.body!.getReader();
         const decoder = new TextDecoder();
-
         try {
           while (true) {
             const { done, value } = await reader.read();
-            
             if (done) break;
 
             const chunk = decoder.decode(value, { stream: true });
             const lines = chunk.split('\n');
-
+            
             for (const line of lines) {
               if (line.trim() === '') continue;
               
@@ -91,6 +88,7 @@ async function sendGeminiMessageStream(content: AIGenerateConfig): Promise<Reada
                   controller.enqueue(text);
                 }
               } catch (parseError) {
+                console.log(parseError);
                 // Skip invalid JSON lines
                 continue;
               }
@@ -179,6 +177,7 @@ async function sendOpenRouterMessageStream(content: AIGenerateConfig): Promise<R
                   controller.enqueue(text);
                 }
               } catch (parseError) {
+                console.log(parseError);
                 // Skip invalid JSON lines
                 continue;
               }

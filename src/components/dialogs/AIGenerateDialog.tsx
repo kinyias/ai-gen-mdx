@@ -52,18 +52,17 @@ export function AIGenerateDialog({
   isGenerating 
 }: AIGenerateDialogProps) {
   const [model, setModel] = useState('gemini-2.5-flash');
-  const [apiKey, setApiKey] = useState('');
+  const [apiKey, setApiKey] = useState(localStorage.getItem('ai_api_key') || '');
   const [prompt, setPrompt] = useState('Generate an engaging MDX article about modern web development with interactive examples and code snippets.');
   const [showApiKey, setShowApiKey] = useState(false);
-
+  
   
   const selectedModel = AI_MODELS.find(m => m.value === model);
-  
   const handleGenerate = async () => {
     if (!apiKey.trim() || !prompt.trim()) {
       return;
     }
-
+    localStorage.setItem('ai_api_key', apiKey);
     await onGenerate({
       model,
       apiKey: apiKey.trim(),
